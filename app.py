@@ -7,87 +7,105 @@ from utils.pdf_utils import extract_text_from_pdf
 from rag.chunking import chunk_resume
 from rag.engine import InterviewEngine
 
-
 st.set_page_config(page_title="AskOne - AI Resume Interviewer", page_icon="🧑‍💻")
 
 st.title("AI Resume Interviewer")
-st.caption("Phase 1: Upload your resume and extract the text")
+st.caption("AI-powered Resume Interview")
 
-uploaded_file = st.file_uploader(
-    label="Upload your resume (PDF only)",
-    type=["pdf"],
-)
+# -------------------------
+# SESSION STATE
+# -------------------------
 
-if uploaded_file is not None:
+if "started" not in st.session_state:
+    st.session_state.started = False
 
-    os.makedirs("uploads", exist_ok=True)
+if "engine" not in st.session_state:
+    st.session_state.engine = None
 
-    file_path = os.path.join("uploads", uploaded_file.name)
+if "current_question" not in st.session_state:
+    st.session_state.current_question = None
 
-    with open(file_path, "wb") as file:
-        file.write(uploaded_file.getbuffer())
+if "history" not in st.session_state:
+    st.session_state.history = []
 
-    st.success("Resume uploaded successfully!")
+# ==========================================================
+# BEFORE INTERVIEW STARTS
+# ==========================================================
 
-    resume_text = extract_text_from_pdf(file_path)
-    resume_chunks = chunk_resume(resume_text)
+if not st.session_state.started:
 
-    if os.path.exists("vector_db"):
-        shutil.rmtree("vector_db")
+    uploaded_file = st.file_uploader(
+        "Upload your resume (PDF only)",
+        type=["pdf"]
+    )
 
-    db = create_vector_store(resume_chunks)
-    retriever = db.as_retriever(search_kwargs={"k": 2})
+    if uploaded_file is not None:
 
-    docs = retriever.invoke("skills")
-    context = "\n".join([doc.page_content for doc in docs])
+        st.success("Resume uploaded successfully!")
 
-    # -------------------------
-    # SESSION STATE SETUP
-    # -------------------------
-    if "engine" not in st.session_state:
-        st.session_state.engine = InterviewEngine(context)
+        if st.button("Start Interview"):
 
-    if "history" not in st.session_state:
-        st.session_state.history = []
+            os.makedirs("uploads", exist_ok=True)
 
-    if "current_question" not in st.session_state:
-        st.session_state.current_question = None
+            file_path = os.path.join("uploads", uploaded_file.name)
 
-    if "step" not in st.session_state:
-        st.session_state.step = "start"
+            with open(file_path, "wb") as file:
+                file.write(uploaded_file.getbuffer())
 
-    # -------------------------
-    # FIRST QUESTION
-    # -------------------------
-    if st.session_state.step == "start":
-        st.session_state.current_question = st.session_state.engine.get_first_question()
-        st.session_state.step = "ask"
+            resume_text = extract_text_from_pdf(file_path)
+            resume_chunks = chunk_resume(resume_text)
 
-    # -------------------------
-    # SHOW QUESTION
-    # -------------------------
-    st.write("AI:", st.session_state.current_question)
+            if os.path.exists("vector_db"):
+                shutil.rmtree("vector_db")
 
-    # -------------------------
-    # USER ANSWER
-    # -------------------------
-    user_answer = st.text_input("Your answer")
+            db = create_vector_store(resume_chunks)
 
-    # -------------------------
-    # NEXT STEP
-    # -------------------------
-    if st.button("Submit") and user_answer:
+            retriever = db.as_retriever(
+                search_kwargs={"k": 2}
+            )
 
-        # store history
+            docs = retriever.invoke("skills projects experience")
+
+            context = "\n".join(
+                doc.page_content
+                for doc in docs
+            )
+
+            engine = InterviewEngine(context)
+
+            st.session_state.engine = engine
+
+            st.session_state.current_question = (
+                engine.get_first_question()
+            )
+
+            st.session_state.started = True
+
+            st.rerun()
+
+# ==========================================================
+# INTERVIEW
+# ==========================================================
+
+else:
+
+    st.write("### AI Interviewer")
+
+    st.write(st.session_state.current_question)
+
+    user_answer = st.text_area("Your Answer")
+
+    if st.button("Submit Answer"):
+
         st.session_state.history.append({
-            "q": st.session_state.current_question,
-            "a": user_answer
+            "question": st.session_state.current_question,
+            "answer": user_answer
         })
 
-        # get next question
-        st.session_state.current_question = st.session_state.engine.get_next_question(user_answer)
+        next_question = (
+            st.session_state.engine.get_next_question(user_answer)
+        )
 
-        # clear input effect (Streamlit workaround)
-        st.session_state.step = "ask"
+        st.session_state.current_question = next_question
 
         st.rerun()
