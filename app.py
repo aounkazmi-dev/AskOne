@@ -7,14 +7,70 @@ from utils.pdf_utils import extract_text_from_pdf
 from rag.chunking import chunk_resume
 from rag.engine import InterviewEngine
 
-st.set_page_config(page_title="AskOne - AI Resume Interviewer", page_icon="🧑‍💻")
+st.set_page_config(page_title="AskOne - AI Resume Interviewer", page_icon="🧑‍💻", layout="centered")
 
-st.title("AI Resume Interviewer")
-st.caption("AI-powered Resume Interview")
+st.markdown(
+    """
+    <style>
+    .stApp { background-color: #0f1117; }
+    .main-title {
+        font-size: 2.2rem;
+        font-weight: 700;
+        text-align: center;
+        margin-bottom: 0.2rem;
+    }
+    .sub-caption {
+        text-align: center;
+        color: #9aa0a6;
+        margin-bottom: 2rem;
+    }
+    .question-card {
+        background-color: #1a1d27;
+        border: 1px solid #2a2e3a;
+        border-radius: 12px;
+        padding: 1.4rem 1.6rem;
+        margin-bottom: 1.2rem;
+    }
+    .question-label {
+        color: #7c9bff;
+        font-size: 0.85rem;
+        font-weight: 600;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        margin-bottom: 0.4rem;
+    }
+    .question-text {
+        font-size: 1.15rem;
+        line-height: 1.5;
+    }
+    .end-card {
+        background: linear-gradient(135deg, #1a1d27, #20242f);
+        border: 1px solid #2a2e3a;
+        border-radius: 16px;
+        padding: 2.5rem 2rem;
+        text-align: center;
+        margin-top: 1.5rem;
+    }
+    .end-icon { font-size: 3rem; margin-bottom: 0.5rem; }
+    .end-title { font-size: 1.6rem; font-weight: 700; margin-bottom: 0.4rem; }
+    .end-subtitle { color: #9aa0a6; margin-bottom: 1.5rem; }
+    .history-item {
+        background-color: #1a1d27;
+        border: 1px solid #2a2e3a;
+        border-radius: 10px;
+        padding: 1rem 1.2rem;
+        margin-bottom: 0.8rem;
+    }
+    .history-q { color: #7c9bff; font-weight: 600; margin-bottom: 0.3rem; }
+    .history-a { color: #d6d6d6; }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
 
-# -------------------------
-# SESSION STATE
-# -------------------------
+st.markdown('<div class="main-title">🧑‍💻 AI Resume Interviewer</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-caption">AI-powered Resume Interview</div>', unsafe_allow_html=True)
+
 
 if "started" not in st.session_state:
     st.session_state.started = False
@@ -28,11 +84,46 @@ if "current_question" not in st.session_state:
 if "history" not in st.session_state:
     st.session_state.history = []
 
-# ==========================================================
-# BEFORE INTERVIEW STARTS
-# ==========================================================
+if "interview_ended" not in st.session_state:
+    st.session_state.interview_ended = False
 
-if not st.session_state.started:
+
+if st.session_state.interview_ended:
+
+    st.markdown(
+        """
+        <div class="end-card">
+            <div class="end-icon">✅</div>
+            <div class="end-title">Interview Completed!</div>
+            <div class="end-subtitle">Great job! Here's a summary of your interview session.</div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    if st.session_state.history:
+        st.write("### 📋 Interview Summary")
+        for i, item in enumerate(st.session_state.history, start=1):
+            st.markdown(
+                f"""
+                <div class="history-item">
+                    <div class="history-q">Q{i}: {item['question']}</div>
+                    <div class="history-a">{item['answer']}</div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+
+    st.write("")
+    if st.button("🔄 Start a New Interview", use_container_width=True):
+        st.session_state.started = False
+        st.session_state.engine = None
+        st.session_state.current_question = None
+        st.session_state.history = []
+        st.session_state.interview_ended = False
+        st.rerun()
+
+elif not st.session_state.started:
 
     uploaded_file = st.file_uploader(
         "Upload your resume (PDF only)",
@@ -83,15 +174,20 @@ if not st.session_state.started:
 
             st.rerun()
 
-# ==========================================================
-# INTERVIEW
-# ==========================================================
 
 else:
 
-    st.write("### AI Interviewer")
+    st.write("### 🎙️ AI Interviewer")
 
-    st.write(st.session_state.current_question)
+    st.markdown(
+        f"""
+        <div class="question-card">
+            <div class="question-label">Question</div>
+            <div class="question-text">{st.session_state.current_question}</div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 
     user_answer = st.text_area("Your Answer")
 
@@ -106,6 +202,10 @@ else:
             st.session_state.engine.get_next_question(user_answer)
         )
 
-        st.session_state.current_question = next_question
+        if next_question is None:
+            st.session_state.started = False
+            st.session_state.interview_ended = True
+        else:
+            st.session_state.current_question = next_question
 
         st.rerun()
