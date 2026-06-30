@@ -152,7 +152,7 @@ elif not st.session_state.started:
             db = create_vector_store(resume_chunks)
 
             retriever = db.as_retriever(
-                search_kwargs={"k": 2}
+                search_kwargs={"k": 3}
             )
 
             docs = retriever.invoke("skills projects experience")
