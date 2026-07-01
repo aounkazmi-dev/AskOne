@@ -2,6 +2,10 @@
 
 AskOne is an AI-powered mock interview app. Upload your resume as a PDF, and it conducts a structured, resume-grounded technical interview using RAG (Retrieval-Augmented Generation) — then generates a downloadable PDF report with personalized feedback.
 
+🔗 **Live demo:** [askone.onrender.com](https://askone.onrender.com)
+
+> Note: this is deployed on Render's free tier, so the app may take 30–60 seconds to spin up if it's been idle.
+
 ## ✨ Features
 
 - 📄 **Resume-aware questions** — extracts and embeds your resume so every question is grounded in your actual projects, skills, and experience.
@@ -39,7 +43,7 @@ Askkone/
 └── .env                       # API keys (not committed)
 ```
 
-## ⚙️ Setup
+## ⚙️ Run Your Own Copy Locally
 
 ### 1. Clone and install dependencies
 
@@ -71,20 +75,25 @@ streamlit run app.py
 
 The app will be available at `http://localhost:8501`.
 
-## ☁️ Deploying on Render
+## ☁️ Deployment
+
+This app is deployed on [Render](https://render.com/) as a Web Service: **[askone.onrender.com](https://askone.onrender.com)**
+
+Render config used:
+
+| Setting | Value |
+|---|---|
+| Build command | `pip install -r requirements.txt` |
+| Start command | `streamlit run app.py --server.port $PORT --server.address 0.0.0.0` |
+| Environment variables | `GOOGLE_API_KEY`, `GROQ_API_KEY` |
+
+To deploy your own fork:
 
 1. Push the project to GitHub (**do not commit your `.env` file**).
-2. Create a new **Web Service** on [Render](https://render.com/), connect your repo.
-3. Set the build command:
-   ```
-   pip install -r requirements.txt
-   ```
-4. Set the start command:
-   ```
-   streamlit run app.py --server.port $PORT --server.address 0.0.0.0
-   ```
-5. Add `GOOGLE_API_KEY` and `GROQ_API_KEY` as environment variables in Render's dashboard (Settings → Environment).
-6. Deploy.
+2. Create a new **Web Service** on Render and connect your repo.
+3. Set the build/start commands above.
+4. Add `GOOGLE_API_KEY` and `GROQ_API_KEY` as environment variables under Settings → Environment.
+5. Deploy.
 
 ## 🖥️ How It Works
 
