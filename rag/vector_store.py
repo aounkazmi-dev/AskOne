@@ -1,14 +1,10 @@
 from langchain_chroma import Chroma
-
-from rag.embeddings import embedding_model
-
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
 
 def create_vector_store(chunks):
-
+    embedding_model = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
     vector_store = Chroma.from_texts(
         texts=chunks,
-        embedding=embedding_model,
-        persist_directory="vector_db"
+        embedding=embedding_model
     )
-
     return vector_store

@@ -182,8 +182,6 @@ elif not st.session_state.started:
                 resume_chunks = chunk_resume(resume_text)
 
                 st.write("🗄️ Building knowledge base...")
-                if os.path.exists("vector_db"):
-                    shutil.rmtree("vector_db")
                 db = create_vector_store(resume_chunks)
 
                 st.write("🔍 Extracting key information...")
