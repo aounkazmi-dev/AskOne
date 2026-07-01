@@ -6,6 +6,7 @@ from rag.vector_store import create_vector_store
 from utils.pdf_utils import extract_text_from_pdf
 from rag.chunking import chunk_resume
 from rag.engine import InterviewEngine
+from utils.report_utils import generate_interview_report
 
 st.set_page_config(page_title="AskOne - AI Resume Interviewer", page_icon="🧑‍💻", layout="centered")
 
@@ -63,6 +64,17 @@ st.markdown(
     }
     .history-q { color: #7c9bff; font-weight: 600; margin-bottom: 0.3rem; }
     .history-a { color: #d6d6d6; }
+    .feedback-card {
+        background-color: #1a1d27;
+        border: 1px solid #2a2e3a;
+        border-left: 4px solid #7c9bff;
+        border-radius: 10px;
+        padding: 1.2rem 1.4rem;
+        margin-bottom: 1rem;
+        color: #d6d6d6;
+        line-height: 1.7;
+        white-space: pre-wrap;
+    }
     </style>
     """,
     unsafe_allow_html=True
@@ -87,6 +99,9 @@ if "history" not in st.session_state:
 if "interview_ended" not in st.session_state:
     st.session_state.interview_ended = False
 
+if "feedback" not in st.session_state:
+    st.session_state.feedback = ""
+
 
 if st.session_state.interview_ended:
 
@@ -95,7 +110,7 @@ if st.session_state.interview_ended:
         <div class="end-card">
             <div class="end-icon">✅</div>
             <div class="end-title">Interview Completed!</div>
-            <div class="end-subtitle">Great job! Here's a summary of your interview session.</div>
+            <div class="end-subtitle">Great job! Here's a summary and feedback for your session.</div>
         </div>
         """,
         unsafe_allow_html=True
@@ -114,13 +129,31 @@ if st.session_state.interview_ended:
                 unsafe_allow_html=True
             )
 
+    if st.session_state.feedback:
+        st.write("### 🤖 AI Feedback & Suggestions")
+        st.markdown(
+            f'<div class="feedback-card">{st.session_state.feedback}</div>',
+            unsafe_allow_html=True
+        )
+
     st.write("")
+
+    pdf_bytes = generate_interview_report(st.session_state.history, st.session_state.feedback)
+    st.download_button(
+        label="📄 Download Interview Report (PDF)",
+        data=pdf_bytes,
+        file_name="interview_report.pdf",
+        mime="application/pdf",
+        use_container_width=True
+    )
+
     if st.button("🔄 Start a New Interview", use_container_width=True):
         st.session_state.started = False
         st.session_state.engine = None
         st.session_state.current_question = None
         st.session_state.history = []
         st.session_state.interview_ended = False
+        st.session_state.feedback = ""
         st.rerun()
 
 elif not st.session_state.started:
@@ -136,41 +169,35 @@ elif not st.session_state.started:
 
         if st.button("Start Interview"):
 
-            os.makedirs("uploads", exist_ok=True)
+            with st.status("Preparing your interview...", expanded=True) as status:
 
-            file_path = os.path.join("uploads", uploaded_file.name)
+                st.write("📄 Reading your resume...")
+                os.makedirs("uploads", exist_ok=True)
+                file_path = os.path.join("uploads", uploaded_file.name)
+                with open(file_path, "wb") as file:
+                    file.write(uploaded_file.getbuffer())
+                resume_text = extract_text_from_pdf(file_path)
 
-            with open(file_path, "wb") as file:
-                file.write(uploaded_file.getbuffer())
+                st.write("✂️ Processing resume content...")
+                resume_chunks = chunk_resume(resume_text)
 
-            resume_text = extract_text_from_pdf(file_path)
-            resume_chunks = chunk_resume(resume_text)
+                st.write("🗄️ Building knowledge base...")
+                if os.path.exists("vector_db"):
+                    shutil.rmtree("vector_db")
+                db = create_vector_store(resume_chunks)
 
-            if os.path.exists("vector_db"):
-                shutil.rmtree("vector_db")
+                st.write("🔍 Extracting key information...")
+                retriever = db.as_retriever(search_kwargs={"k": 3})
+                docs = retriever.invoke("skills projects experience")
+                context = "\n".join(doc.page_content for doc in docs)
 
-            db = create_vector_store(resume_chunks)
+                st.write("🤖 Generating your first question...")
+                engine = InterviewEngine(context)
+                st.session_state.engine = engine
+                st.session_state.current_question = engine.get_first_question()
+                st.session_state.started = True
 
-            retriever = db.as_retriever(
-                search_kwargs={"k": 3}
-            )
-
-            docs = retriever.invoke("skills projects experience")
-
-            context = "\n".join(
-                doc.page_content
-                for doc in docs
-            )
-
-            engine = InterviewEngine(context)
-
-            st.session_state.engine = engine
-
-            st.session_state.current_question = (
-                engine.get_first_question()
-            )
-
-            st.session_state.started = True
+                status.update(label="✅ Interview ready!", state="complete", expanded=False)
 
             st.rerun()
 
@@ -198,13 +225,15 @@ else:
             "answer": user_answer
         })
 
-        next_question = (
-            st.session_state.engine.get_next_question(user_answer)
-        )
+        next_question = st.session_state.engine.get_next_question(user_answer)
 
         if next_question is None:
             st.session_state.started = False
             st.session_state.interview_ended = True
+            with st.spinner("Analysing your responses and generating feedback..."):
+                st.session_state.feedback = st.session_state.engine.get_interview_feedback(
+                    st.session_state.history
+                )
         else:
             st.session_state.current_question = next_question
 
